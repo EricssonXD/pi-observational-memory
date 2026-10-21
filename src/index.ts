@@ -12,6 +12,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { registerCompactCommand } from "./commands/compact.js";
 import { registerConsolidateCommand } from "./commands/consolidate.js";
+import { registerModelCommand } from "./commands/model.js";
 import { registerStatusCommand } from "./commands/status.js";
 import { registerCompactionHook } from "./hooks/compaction-hook.js";
 import { registerCompactionTrigger } from "./hooks/compaction-trigger.js";
@@ -91,4 +92,5 @@ export default function observationalMemory(pi: ExtensionAPI): void {
 	registerStatusCommand(pi, runtime);
 	registerCompactCommand(pi, runtime);
 	registerConsolidateCommand(pi, runtime);
+	registerModelCommand(pi, runtime);
 }

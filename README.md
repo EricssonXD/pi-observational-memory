@@ -93,6 +93,8 @@ folds each run into an `om.cost` ledger entry.
 | `/om:status` | Workers in flight, active observation count, next-observer progress, pool/consolidator state, topic-file count, journey size, context usage, **session cost**, last error |
 | `/om:compact` | Force a compaction now (ignores the threshold) |
 | `/om:consolidate` | Force a consolidation now (ignores the pool threshold) |
+| `/om:model observer [search]` | Pick and persist the observer worker model |
+| `/om:model consolidator [search]` | Pick and persist the consolidator worker model |
 
 ## Configuration
 
@@ -119,6 +121,10 @@ Namespace `observational-memory` in `~/.pi/agent/settings.json` (global) or
   }
 }
 ```
+
+`/om:model` writes model selections to the project `.pi/settings.json` and applies them immediately to
+future worker runs in the current session. It works while observational memory is off; choose
+`observer` or `consolidator`, then type to search configured-provider models.
 
 `PI_OM_PASSIVE=1` forces `passive` (disables all triggers) for clean `/tree` testing.
 `passive` is a power-user setting distinct from the on/off gate.

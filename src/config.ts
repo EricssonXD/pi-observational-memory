@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
@@ -8,6 +8,8 @@ export interface ConfiguredModel {
 	id: string;
 	thinking?: ModelThinkingLevel;
 }
+
+export type WorkerRole = "observer" | "consolidator";
 
 export interface Config {
 	/** Raw-history token size of one observation chunk (fixed boundary). */
@@ -126,6 +128,32 @@ function normalizeSettingsConfig(value: Record<string, unknown>, base: Config): 
 	return normalized;
 }
 
+export function saveConfiguredModel(cwd: string, role: WorkerRole, model: ConfiguredModel): void {
+	const path = join(cwd, ".pi", "settings.json");
+	let settings: Record<string, unknown> = {};
+	if (existsSync(path)) {
+		const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
+		if (!isRecord(parsed)) throw new Error(`Invalid settings file: ${path}`);
+		settings = parsed;
+	}
+
+	const config = settings[SETTINGS_KEY];
+	if (config !== undefined && !isRecord(config)) throw new Error(`Invalid ${SETTINGS_KEY} settings in ${path}`);
+	const current = (config as Record<string, unknown> | undefined) ?? {};
+	const existingModels = current.models;
+	if (existingModels !== undefined && !isRecord(existingModels)) throw new Error(`Invalid models settings in ${path}`);
+	const models = (existingModels as Record<string, unknown> | undefined) ?? {};
+	const existingModel = models[role];
+	if (existingModel !== undefined && !isRecord(existingModel)) throw new Error(`Invalid ${role} model settings in ${path}`);
+
+	settings[SETTINGS_KEY] = {
+		...current,
+		models: { ...models, [role]: { ...(existingModel as Record<string, unknown> | undefined), provider: model.provider, id: model.id } },
+	};
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+}
+
 export function readEnvConfig(env: NodeJS.ProcessEnv = process.env): Partial<Config> {
 	const rawPassive = env[PASSIVE_ENV];
 	if (rawPassive === undefined) return {};
@@ -150,7 +178,12 @@ export function loadConfig(cwd: string, env: NodeJS.ProcessEnv = process.env): C
 	const globalPath = join(getAgentDir(), "settings.json");
 	const projectPath = join(cwd, ".pi", "settings.json");
 	const globalConfig = readNamespacedConfig(globalPath, DEFAULTS);
-	const projectConfig = readNamespacedConfig(projectPath, DEFAULTS);
+	const projectBase: Config = {
+		...DEFAULTS,
+		...globalConfig,
+		models: { ...DEFAULTS.models, ...globalConfig.models },
+	};
+	const projectConfig = readNamespacedConfig(projectPath, projectBase);
 	const envConfig = readEnvConfig(env);
 	return {
 		...DEFAULTS,
