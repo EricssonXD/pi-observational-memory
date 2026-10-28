@@ -10,6 +10,7 @@ export interface ConfiguredModel {
 }
 
 export type WorkerRole = "observer" | "consolidator";
+export type ConfigScope = "project" | "global";
 
 export interface Config {
 	/** Raw-history token size of one observation chunk (fixed boundary). */
@@ -42,6 +43,8 @@ export interface Config {
 	 * it stops as if nothing happened. Default true.
 	 */
 	resumeAfterMidRunCompaction: boolean;
+	/** Initial on/off state for sessions without an explicit ledger toggle. */
+	enabledByDefault: boolean;
 	/** Power-user setting: disable all triggers (distinct from the on/off gate). */
 	passive: boolean;
 	/** Emit the NDJSON debug log. */
@@ -62,6 +65,7 @@ export const DEFAULTS: Config = {
 		observer: { provider: "openrouter", id: "z-ai/glm-5.3", thinking: "low" },
 		consolidator: { provider: "openrouter", id: "z-ai/glm-5.3", thinking: "medium" },
 	},
+	enabledByDefault: false,
 	passive: false,
 	debugLog: false,
 };
@@ -117,6 +121,7 @@ function normalizeSettingsConfig(value: Record<string, unknown>, base: Config): 
 	if (value.chunkOverlapTokens === 0) normalized.chunkOverlapTokens = 0;
 	if (typeof value.resumeAfterMidRunCompaction === "boolean")
 		normalized.resumeAfterMidRunCompaction = value.resumeAfterMidRunCompaction;
+	if (typeof value.enabledByDefault === "boolean") normalized.enabledByDefault = value.enabledByDefault;
 	if (typeof value.passive === "boolean") normalized.passive = value.passive;
 	if (typeof value.debugLog === "boolean") normalized.debugLog = value.debugLog;
 	if (isRecord(value.models)) {
@@ -128,30 +133,47 @@ function normalizeSettingsConfig(value: Record<string, unknown>, base: Config): 
 	return normalized;
 }
 
-export function saveConfiguredModel(cwd: string, role: WorkerRole, model: ConfiguredModel): void {
-	const path = join(cwd, ".pi", "settings.json");
+function readNamespacedSettings(path: string): { settings: Record<string, unknown>; config: Record<string, unknown> } {
 	let settings: Record<string, unknown> = {};
 	if (existsSync(path)) {
 		const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
 		if (!isRecord(parsed)) throw new Error(`Invalid settings file: ${path}`);
 		settings = parsed;
 	}
-
 	const config = settings[SETTINGS_KEY];
 	if (config !== undefined && !isRecord(config)) throw new Error(`Invalid ${SETTINGS_KEY} settings in ${path}`);
-	const current = (config as Record<string, unknown> | undefined) ?? {};
-	const existingModels = current.models;
+	return { settings, config: (config as Record<string, unknown> | undefined) ?? {} };
+}
+
+function writeNamespacedSettings(path: string, settings: Record<string, unknown>, config: Record<string, unknown>): void {
+	settings[SETTINGS_KEY] = config;
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+}
+
+function configPath(cwd: string, scope: ConfigScope): string {
+	return scope === "global" ? join(getAgentDir(), "settings.json") : join(cwd, ".pi", "settings.json");
+}
+
+export function saveEnabledByDefault(cwd: string, enabled: boolean, scope: ConfigScope): void {
+	const path = configPath(cwd, scope);
+	const { settings, config } = readNamespacedSettings(path);
+	writeNamespacedSettings(path, settings, { ...config, enabledByDefault: enabled });
+}
+
+export function saveConfiguredModel(cwd: string, role: WorkerRole, model: ConfiguredModel): void {
+	const path = configPath(cwd, "project");
+	const { settings, config } = readNamespacedSettings(path);
+	const existingModels = config.models;
 	if (existingModels !== undefined && !isRecord(existingModels)) throw new Error(`Invalid models settings in ${path}`);
 	const models = (existingModels as Record<string, unknown> | undefined) ?? {};
 	const existingModel = models[role];
 	if (existingModel !== undefined && !isRecord(existingModel)) throw new Error(`Invalid ${role} model settings in ${path}`);
 
-	settings[SETTINGS_KEY] = {
-		...current,
+	writeNamespacedSettings(path, settings, {
+		...config,
 		models: { ...models, [role]: { ...(existingModel as Record<string, unknown> | undefined), provider: model.provider, id: model.id } },
-	};
-	mkdirSync(dirname(path), { recursive: true });
-	writeFileSync(path, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+	});
 }
 
 export function readEnvConfig(env: NodeJS.ProcessEnv = process.env): Partial<Config> {

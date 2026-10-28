@@ -7,7 +7,8 @@ Parallel **observers** distill raw conversation chunks into atomic observations 
 ## On/off gate (default OFF)
 
 The extension ships in the global extensions folder during development, so it is **gated off
-per session** and is completely invisible until you turn it on.
+per session by default**. Set `enabledByDefault: true` in repo `.pi/settings.json` to start on
+when a session has no saved `/om on` or `/om off` state. An explicit session toggle always wins.
 
 - `/om` — toggle for this session
 - `/om on` / `/om off` — set explicitly
@@ -93,6 +94,7 @@ folds each run into an `om.cost` ledger entry.
 | `/om:status` | Workers in flight, active observation count, next-observer progress, pool/consolidator state, topic-file count, journey size, context usage, **session cost**, last error |
 | `/om:compact` | Force a compaction now (ignores the threshold) |
 | `/om:consolidate` | Force a consolidation now (ignores the pool threshold) |
+| `/om:default <on-or-off> [project-or-global]` | Set the startup default (project scope overrides global; defaults to project) |
 | `/om:model observer [search]` | Pick and persist the observer worker model |
 | `/om:model consolidator [search]` | Pick and persist the consolidator worker model |
 
@@ -112,6 +114,7 @@ Namespace `observational-memory` in `~/.pi/agent/settings.json` (global) or
     "tailTokens": 20000,                 // verbatim tail; snaps to a chunk boundary
     "journeyTargetTokens": 1000,         // pushed JOURNEY.md size; compress oldest segments past this
     "observerConcurrency": 4,
+    "enabledByDefault": true,           // start sessions on unless their ledger has an explicit toggle
     "models": {
       "observer":     { "provider": "anthropic", "id": "claude-sonnet-4-6", "thinking": "low" },
       "consolidator": { "provider": "anthropic", "id": "claude-sonnet-4-6", "thinking": "medium" }
@@ -121,6 +124,12 @@ Namespace `observational-memory` in `~/.pi/agent/settings.json` (global) or
   }
 }
 ```
+
+`enabledByDefault` defaults to `false`. Use `/om:default on` or `/om:default off` to set the repo's
+`.pi/settings.json`; add the scope for global settings (for example `/om:default on global`). With no
+arguments, the command shows the effective startup default. Project scope is the command default and
+always overrides global scope. The setting only affects startup when the session ledger has no explicit
+gate entry; it does not change the current session, and `/om on` or `/om off` remains authoritative.
 
 `/om:model` writes model selections to the project `.pi/settings.json` and applies them immediately to
 future worker runs in the current session. It works while observational memory is off; choose

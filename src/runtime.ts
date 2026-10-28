@@ -10,7 +10,7 @@ export class Runtime {
 	config: Config = { ...DEFAULTS };
 	configLoaded = false;
 
-	/** The per-session on/off gate (default OFF). Outermost guard in every handler. */
+	/** The per-session on/off gate (configurable default). Outermost guard in every handler. */
 	enabled = false;
 
 	/**
